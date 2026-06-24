@@ -1,4 +1,4 @@
-# TIDE-Adj
+# TIDE-Adj: Time-Domain Inverse-Design Extensions for Adjoint Optimization
 
 [![Release](https://img.shields.io/github/v/release/Jaehyeon-Park/tide-adj?include_prereleases&label=release)](https://github.com/Jaehyeon-Park/tide-adj/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL_v2-blue.svg)](LICENSE)
