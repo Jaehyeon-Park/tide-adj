@@ -66,6 +66,12 @@ class MultiTDAObjective:
     The class evaluates several wavelength bands from one broadband time-domain
     run by filtering monitor histories with bandpass kernels. The resulting
     band objectives are combined by a user-provided scalarization function.
+
+    Sign convention: ``evaluate`` / ``fom_and_grad`` return
+    ``(total_fom, d total_fom / d rho)`` with the maximization sign, matching
+    ``TDAObjective`` and Meep adjoint's ``OptimizationProblem``. Negate both in
+    the optimizer callback when driving a minimizer such as nlopt or
+    ``scipy.optimize.minimize``.
     """
 
     def __init__(
@@ -387,7 +393,6 @@ class MultiTDAObjective:
             self.scalarization_fn(band_objectives),
             band_objectives,
         )
-        objective_loss = -total_fom
         self.last_band_objectives = band_objectives
         self.last_band_losses = band_losses
         self.last_band_coeffs = band_coeffs
@@ -399,7 +404,7 @@ class MultiTDAObjective:
         )
         self.last_total_fom = total_fom
         if not need_gradient:
-            return objective_loss, None
+            return total_fom, None
 
         adj_signals = filtered_monitors * band_coeffs[None, :]
         adj_signals = adj_signals[::-1]
@@ -450,12 +455,12 @@ class MultiTDAObjective:
             [coeff * kernel for coeff, kernel in zip(band_coeffs, self.weighted_kernels)],
             axis=0,
         )
-        gradient = -self.band_gradient(fwd_history, adj_history, gradient_kernel)
+        gradient = self.band_gradient(fwd_history, adj_history, gradient_kernel)
 
         self._cleanup_history_memmaps((fwd_history, fwd_history_path), (adj_history, adj_history_path))
         del fwd_history, adj_history, monitor_history, filtered_monitors
         gc.collect()
-        return objective_loss, gradient
+        return total_fom, gradient
 
     def filter_monitor_signals(self, signals: np.ndarray) -> np.ndarray:
         filtered = []

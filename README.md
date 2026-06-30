@@ -339,8 +339,11 @@ For optional diagnostics, return a third item:
 return total_fom, band_coeffs, {"name": value}
 ```
 
-The returned loss is `-total_fom`. `band_coeffs` are used to scale each band
-adjoint source and gradient kernel.
+`MultiTDAObjective` returns `(total_fom, d total_fom / d rho)` with the
+maximization sign, matching `TDAObjective` and Meep adjoint's
+`OptimizationProblem`. Negate both in the optimizer callback when driving a
+minimizer such as nlopt or `scipy.optimize.minimize`. `band_coeffs` are used to
+scale each band adjoint source and gradient kernel.
 
 ### MultiTDAObjective Inputs
 

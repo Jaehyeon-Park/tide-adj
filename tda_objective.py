@@ -25,6 +25,12 @@ class TDAObjective:
     customized with `fom_fn`; when no adjoint signal is supplied, autograd
     differentiates `fom_fn(E_t, dt)` with respect to the sampled monitor
     history.
+
+    Sign convention: ``evaluate`` / ``fom_and_grad`` return
+    ``(fom, d fom / d rho)`` with the maximization sign, matching
+    ``MultiTDAObjective`` and Meep adjoint's ``OptimizationProblem``. Negate
+    both in the optimizer callback when driving a minimizer such as nlopt or
+    ``scipy.optimize.minimize``.
     """
 
     def __init__(
