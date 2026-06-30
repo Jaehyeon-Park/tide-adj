@@ -8,6 +8,7 @@ import numpy as np
 
 from .sampling_grid import FastFieldGrid, FastGradientGrid
 from .objectives import _PointTarget
+from .specs import DesignGrid, PointTarget, SimulationSpec
 
 
 def _default_intensity_fom(monitor_history: np.ndarray, sample_dt: float):
@@ -28,16 +29,16 @@ class TDAObjective:
 
     def __init__(
         self,
-        update_design: Callable[[np.ndarray], None],
-        coords_x: Sequence[float],
-        coords_y: Sequence[float],
-        t_final: float,
-        sim_factory: Callable[..., mp.Simulation],
-        monitor_position: mp.Vector3,
-        component: int,
-        cell_area: float,
+        update_design: Optional[Callable[[np.ndarray], None]] = None,
+        coords_x: Optional[Sequence[float]] = None,
+        coords_y: Optional[Sequence[float]] = None,
+        t_final: Optional[float] = None,
+        sim_factory: Optional[Callable[..., mp.Simulation]] = None,
+        monitor_position: Optional[mp.Vector3] = None,
+        component: Optional[int] = None,
+        cell_area: Optional[float] = None,
         adjoint_source_size: Optional[mp.Vector3] = None,
-        adjoint_source_amplitude: float = 1.0,
+        adjoint_source_amplitude: Optional[float] = None,
         background: Optional[mp.Medium] = None,
         design_material: Optional[mp.Medium] = None,
         material_factor: Optional[float] = None,
@@ -46,6 +47,9 @@ class TDAObjective:
         dt: Optional[float] = None,
         resolution: Optional[float] = None,
         sampling_interval: int = 1,
+        design: Optional[DesignGrid] = None,
+        simulation: Optional[SimulationSpec] = None,
+        target: Optional[PointTarget] = None,
     ) -> None:
         """Create a callable time-domain adjoint optimization problem.
 
@@ -81,12 +85,65 @@ class TDAObjective:
                 created simulation does not expose one.
             sampling_interval: Number of Meep time steps between design-grid
                 field samples.
+            design: Optional ``DesignGrid`` bundle. When supplied, it fills
+                ``update_design``, ``coords_x``, ``coords_y``, ``cell_area``,
+                and ``material_factor`` unless those are explicitly supplied.
+            simulation: Optional ``SimulationSpec`` bundle. When supplied, it
+                fills ``sim_factory`` and ``resolution`` unless those are
+                explicitly supplied.
+            target: Optional ``PointTarget`` bundle. When supplied, it fills
+                ``monitor_position``, ``component``, ``adjoint_source_size``,
+                and ``adjoint_source_amplitude`` unless those are explicitly
+                supplied.
         """
+        if design is not None:
+            update_design = update_design if update_design is not None else design.update_weights
+            coords_x = coords_x if coords_x is not None else design.coords_x
+            coords_y = coords_y if coords_y is not None else design.coords_y
+            cell_area = cell_area if cell_area is not None else design.cell_area
+            material_factor = material_factor if material_factor is not None else design.material_factor
+            background = background if background is not None else design.background
+            design_material = design_material if design_material is not None else design.design_material
+        if simulation is not None:
+            sim_factory = sim_factory if sim_factory is not None else simulation.make
+            resolution = resolution if resolution is not None else simulation.resolution
+        if target is not None:
+            monitor_position = monitor_position if monitor_position is not None else target.position
+            component = component if component is not None else target.component
+            adjoint_source_size = (
+                adjoint_source_size
+                if adjoint_source_size is not None
+                else target.adjoint_source_size
+            )
+            adjoint_source_amplitude = (
+                adjoint_source_amplitude
+                if adjoint_source_amplitude is not None
+                else target.adjoint_source_amplitude
+            )
+        if adjoint_source_amplitude is None:
+            adjoint_source_amplitude = 1.0
+
+        missing = [
+            name for name, value in (
+                ("update_design", update_design),
+                ("coords_x", coords_x),
+                ("coords_y", coords_y),
+                ("t_final", t_final),
+                ("sim_factory", sim_factory),
+                ("monitor_position", monitor_position),
+                ("component", component),
+                ("cell_area", cell_area),
+            )
+            if value is None
+        ]
+        if missing:
+            raise ValueError("TDAObjective missing required inputs: " + ", ".join(missing))
+
         self.update_design = update_design
         self.sim_factory = sim_factory
         self.coords_x = coords_x
         self.coords_y = coords_y
-        self.t_final = t_final
+        self.t_final = float(t_final)
         self.dt = dt
         self.resolution = resolution
         self.sampling_interval = sampling_interval
