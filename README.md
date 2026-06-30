@@ -40,6 +40,7 @@ tide_adj/
 ├── native_sampler.py  # compatibility wrapper
 ├── native_sampler.pyi
 ├── specs.py
+├── multi_tda_objective.py
 ├── objectives.py
 ├── tda_objective.py
 └── build_native_sampler.sh
@@ -288,6 +289,87 @@ objects and explicit physical coordinates rather than hidden configuration.
 | `dt` | Explicit sampling time step. |
 | `resolution` | Used to infer `dt = 0.5 / resolution` when `dt` is omitted. |
 | `sampling_interval` | Number of Meep time steps between design-grid field samples. |
+
+## MultiTDAObjective Example
+
+`MultiTDAObjective` is a multi-band temporal-convolution objective. It
+evaluates several wavelength bands from one broadband time-domain run and
+combines the resulting per-band FoMs through a user-defined scalarization
+function.
+
+```python
+def scalarization_fn(band_objectives):
+    total_fom = np.sum(band_objectives)
+    band_coeffs = np.ones_like(band_objectives)
+    return total_fom, band_coeffs
+
+
+multi_tda = tp.MultiTDAObjective(
+    design=design,
+    simulation=simulation,
+    targets=[
+        tp.PointTarget(
+            position=pos,
+            component=mp.Ez,
+            adjoint_source_size=adjoint_source_size,
+            adjoint_source_amplitude=adjoint_source_amplitude,
+        )
+        for pos in monitor_positions
+    ],
+    t_final=T_f,
+    wavelength_bands=[(0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8)],
+    weights=band_weights,
+    kernel_length=2001,
+    dt=dt,
+    scalarization_fn=scalarization_fn,
+)
+```
+
+`scalarization_fn` defines how per-band FoMs become one scalar FoM. It must
+return the scalar FoM and the derivative of that scalar with respect to each
+band FoM:
+
+```python
+total_fom, band_coeffs = scalarization_fn(band_objectives)
+```
+
+For optional diagnostics, return a third item:
+
+```python
+return total_fom, band_coeffs, {"name": value}
+```
+
+The returned loss is `-total_fom`. `band_coeffs` are used to scale each band
+adjoint source and gradient kernel.
+
+### MultiTDAObjective Inputs
+
+| Input | Meaning |
+| --- | --- |
+| `design` | Optional `DesignGrid`. Fills design update, sampling coordinates, cell area, and material factor. |
+| `simulation` | Optional `SimulationSpec`. Fills the simulation factory and resolution. |
+| `targets` | Optional list of `PointTarget` objects. Current implementation expects one target per wavelength band and one shared component/source size/source amplitude. |
+| `update_design` | Same role as in `TDAObjective`: writes the design vector into the active Meep design object. |
+| `sim_factory` | Same role as in `TDAObjective`: returns forward or adjoint `mp.Simulation` objects. |
+| `coords_x`, `coords_y` | Physical design-grid sampling coordinates. These define where forward and adjoint fields are sampled for the design gradient. |
+| `t_final` | Main forward simulation time. The class internally runs until `t_final + kernel_length * dt` so the temporal filter has enough tail. |
+| `monitor_positions` | Point-monitor locations. Current implementation expects one monitor position per wavelength band. |
+| `component` | Meep field component used for monitor sampling, adjoint source injection, and design-grid field sampling. |
+| `wavelength_bands` | List of `(lambda_min, lambda_max)` intervals. Each interval creates one bandpass temporal-convolution kernel. |
+| `weights` | Per-band amplitude weights. These are applied to monitor filtering and the gradient kernel. |
+| `kernel_length` | Number of time samples in the temporal-convolution bandpass kernel. Larger values give narrower filtering but increase runtime and temporary storage. |
+| `pixel_chunk` | Design-pixel block size for temporal-convolution gradient evaluation. Defaults to `"auto"` and usually should be omitted. |
+| `target_chunks_per_rank` | Target number of pixel chunks per MPI rank when `pixel_chunk="auto"`. Default is `8`. |
+| `min_pixel_chunk`, `max_pixel_chunk` | Lower and upper bounds for automatic `pixel_chunk`. Defaults are `16` and `128`. |
+| `adjoint_source_size` | Meep source size for each adjoint monitor source. Usually the value returned by `adjoint_source_boundary_workaround`. |
+| `adjoint_source_amplitude` | Amplitude multiplier for each adjoint source. Usually the value returned by `adjoint_source_boundary_workaround`. |
+| `background`, `design_material` | Materials used to infer `d epsilon / d rho`. |
+| `material_factor` | Explicit `d epsilon / d rho`. If supplied, `background` and `design_material` are not required. |
+| `cell_area` | Area represented by one 2D design variable. |
+| `dt` | Explicit time step used for monitor integration, temporal convolution, and gradient scaling. |
+| `resolution` | Used to infer `dt = 0.5 / resolution` when `dt` is omitted. |
+| `scalarization_fn` | User-defined scalarization function. It receives `band_objectives` and returns `(total_fom, band_coeffs)` or `(total_fom, band_coeffs, info)`. |
+| `history_dtype` | Complex dtype for temporary forward/adjoint field-history memmaps. Default is `np.complex128`. |
 
 ## Running
 
