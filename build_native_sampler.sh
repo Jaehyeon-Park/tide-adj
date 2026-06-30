@@ -2,7 +2,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONDA_ENV_PREFIX="${MEEP_CONDA_PREFIX:-/home/smrm/miniconda3/envs/mp}"
+CONDA_ENV_PREFIX="${MEEP_CONDA_PREFIX:-${CONDA_PREFIX:-}}"
+
+if [[ -z "${CONDA_ENV_PREFIX}" ]]; then
+  echo "Error: activate a conda environment or set MEEP_CONDA_PREFIX." >&2
+  exit 1
+fi
+
 PYTHON_BIN="${PYTHON_BIN:-${CONDA_ENV_PREFIX}/bin/python}"
 CXX="${CXX:-${CONDA_ENV_PREFIX}/bin/mpic++}"
 
