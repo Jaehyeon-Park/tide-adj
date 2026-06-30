@@ -17,6 +17,7 @@ from .chunking import (
 )
 from .coords import centered_grid_coords
 from .sampling_grid import FastFieldGrid, FastGradientGrid, native_sampler_available
+from .specs import DesignGrid, PointTarget, SimulationSpec
 from .tda_objective import TDAObjective
 
 __all__ = [
@@ -30,6 +31,9 @@ __all__ = [
     "centered_grid_coords",
     "FastFieldGrid",
     "FastGradientGrid",
+    "DesignGrid",
+    "PointTarget",
+    "SimulationSpec",
     "TDAObjective",
     "native_sampler_available",
 ]

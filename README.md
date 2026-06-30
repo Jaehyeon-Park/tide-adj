@@ -39,6 +39,7 @@ tide_adj/
 ├── native_sampler.cpp
 ├── native_sampler.py  # compatibility wrapper
 ├── native_sampler.pyi
+├── specs.py
 ├── objectives.py
 ├── tda_objective.py
 └── build_native_sampler.sh
@@ -132,6 +133,18 @@ coords_x, coords_y = tp.centered_grid_coords(
 These coordinates can be passed to `TDAObjective` or to `FastFieldGrid` /
 `FastGradientGrid` directly.
 
+For less repetitive objective setup, use the bundled input objects:
+
+| Object | Bundles |
+| --- | --- |
+| `DesignGrid` | `MaterialGrid`, design-region center/size/shape, sampling coordinates, cell area, and `d epsilon / d rho`. |
+| `SimulationSpec` | Common `mp.Simulation` constructor inputs such as cell size, PML layers, geometry, default sources, resolution, `geometry_center`, and `chunk_layout`. |
+| `PointTarget` | Point-monitor position, field component, and matching adjoint-source size/amplitude. |
+
+`SimulationSpec.make()` behaves like the examples' usual `make_sim(sources=None)`
+factory: no argument creates the forward simulation, and an explicit source list
+creates the adjoint simulation.
+
 ## MPI Source-Boundary Workaround
 
 Meep ordinary `mp.Source` deposition can depend on MPI chunk boundaries for
@@ -202,35 +215,38 @@ For lower-level control, use `SourceBoundaryPolicy` and
 Minimal shape of a TIDE-Adj time-domain adjoint setup:
 
 ```python
-def update_design(x):
-    design_variables.update_weights(np.asarray(x))
+design = tp.DesignGrid(
+    material_grid=design_variables,
+    center=design_center,
+    size=design_region_size,
+    shape=(nx, ny),
+    background=air,
+    design_material=design_material,
+)
 
+simulation = tp.SimulationSpec(
+    cell_size=cell_size,
+    boundary_layers=pml_layers,
+    geometry=geometry,
+    sources=fwd_sources,
+    resolution=resolution,
+    geometry_center=geometry_center,
+    chunk_layout=chunk_layout,
+)
 
-def make_sim(sources=None):
-    return mp.Simulation(
-        cell_size=cell_size,
-        boundary_layers=pml_layers,
-        geometry=geometry,
-        sources=fwd_sources if sources is None else sources,
-        resolution=resolution,
-        geometry_center=geometry_center,
-        chunk_layout=chunk_layout,
-    )
+target = tp.PointTarget(
+    position=monitor_position,
+    component=mp.Ez,
+    adjoint_source_size=adjoint_source_size,
+    adjoint_source_amplitude=adjoint_source_amplitude,
+)
 
 
 tda = tp.TDAObjective(
-    update_design=update_design,
-    coords_x=coords_x,
-    coords_y=coords_y,
+    design=design,
+    simulation=simulation,
+    target=target,
     t_final=T_f,
-    sim_factory=make_sim,
-    monitor_position=monitor_position,
-    component=mp.Ez,
-    cell_area=dx * dy,
-    adjoint_source_size=adjoint_source_size,
-    adjoint_source_amplitude=adjoint_source_amplitude,
-    background=air,
-    design_material=design_material,
     resolution=resolution,
 )
 
@@ -245,6 +261,33 @@ fom, gradient = tda.fom_and_grad(x)
 
 For a custom scalar objective, pass `fom_fn(monitor_history, sample_dt)`. Use
 autograd-compatible operations unless you also provide `adjoint_signal_fn`.
+
+### TDAObjective Inputs
+
+`TDAObjective` follows the same style as Meep objects: users pass ordinary Meep
+objects and explicit physical coordinates rather than hidden configuration.
+
+| Input | Meaning |
+| --- | --- |
+| `design` | Optional `DesignGrid`. Fills `update_design`, `coords_x`, `coords_y`, `cell_area`, and `material_factor`. |
+| `simulation` | Optional `SimulationSpec`. Fills `sim_factory` and `resolution`. |
+| `target` | Optional `PointTarget`. Fills `monitor_position`, `component`, `adjoint_source_size`, and `adjoint_source_amplitude`. |
+| `update_design` | Function that writes the flat design vector into the Meep design object. Usually calls `MaterialGrid.update_weights(...)`. |
+| `coords_x`, `coords_y` | Physical sampling coordinates over the design region. Use `tp.centered_grid_coords(...)` when the design grid is rectangular. |
+| `t_final` | Forward simulation end time. |
+| `sim_factory` | Function returning `mp.Simulation`. Called with no argument for the forward run and with an adjoint source list for the adjoint run. |
+| `monitor_position` | Physical point where the forward monitor signal is sampled and where the adjoint source is placed. |
+| `component` | Meep field component, e.g. `mp.Ez`. Current examples are 2D TMz/Ez-oriented. |
+| `cell_area` | Area represented by one 2D design variable. Used to scale the final gradient. |
+| `adjoint_source_size` | Meep source size for the adjoint source. Use `mp.Vector3()` for a point source or the source-boundary workaround result. |
+| `adjoint_source_amplitude` | Scalar amplitude multiplier for the adjoint source. Use the source-boundary workaround result when finite-source fallback is selected. |
+| `background`, `design_material` | Materials used to infer `d epsilon / d rho`. |
+| `material_factor` | Explicit `d epsilon / d rho`. If supplied, `background` and `design_material` are not required. |
+| `fom_fn` | Optional scalar objective `fom_fn(monitor_history, sample_dt)`. |
+| `adjoint_signal_fn` | Optional manual provider for `dFoM/dE(t)`. Use this when `fom_fn` is not autograd-compatible. |
+| `dt` | Explicit sampling time step. |
+| `resolution` | Used to infer `dt = 0.5 / resolution` when `dt` is omitted. |
+| `sampling_interval` | Number of Meep time steps between design-grid field samples. |
 
 ## Running
 
