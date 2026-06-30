@@ -56,12 +56,12 @@ Use a conda environment with MPI-enabled Meep and the Python dependencies used
 by the example scripts.
 
 ```bash
-conda create -n meep-latest -c conda-forge \
+conda create -n <env-name> -c conda-forge \
   python=3.11 \
   "pymeep=*=mpi_mpich_*" \
   mpi4py mpich cxx-compiler \
   nlopt scipy matplotlib autograd numpy
-conda activate meep-latest
+conda activate <env-name>
 ```
 
 For an existing environment:
