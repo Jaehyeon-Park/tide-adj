@@ -30,20 +30,26 @@ with or endorsed by the Meep project.
 ## Files
 
 ```text
-tide_adj/
-├── __init__.py
-├── chunking.py
-├── coords.py
-├── fastmeep_grid.py  # compatibility shim
-├── sampling_grid.py
-├── native_sampler.cpp
-├── native_sampler.py  # compatibility wrapper
-├── native_sampler.pyi
-├── specs.py
-├── multi_tda_objective.py
-├── objectives.py
-├── tda_objective.py
-└── build_native_sampler.sh
+tide-adj/
+├── README.md
+├── LICENSE
+├── pyproject.toml
+├── build_native_sampler.sh
+├── src/
+│   └── tide_adj/
+│       ├── __init__.py
+│       ├── chunking.py
+│       ├── coords.py
+│       ├── fastmeep_grid.py  # compatibility shim
+│       ├── sampling_grid.py
+│       ├── native_sampler.cpp
+│       ├── native_sampler.py  # compatibility wrapper
+│       ├── native_sampler.pyi
+│       ├── specs.py
+│       ├── multi_tda_objective.py
+│       ├── objectives.py
+│       └── tda_objective.py
+└── tests/
 ```
 
 GitHub source releases contain the Python sources and native-sampler source
@@ -82,10 +88,20 @@ which python
 which mpic++
 ```
 
+## Install From Source
+
+From a source checkout, install TIDE-Adj in editable mode:
+
+```bash
+cd <tide-adj-source-directory>
+python -m pip install -e .
+python -c "import tide_adj; print(tide_adj.__version__)"
+```
+
 ## Native Sampler
 
 TIDE-Adj can use a C++ extension for faster field sampling. Build it in the
-target Python/Meep environment.
+target Python/Meep environment after installing from source.
 
 ```bash
 cd <tide-adj-source-directory>
@@ -93,11 +109,9 @@ chmod +x build_native_sampler.sh
 MEEP_CONDA_PREFIX="$CONDA_PREFIX" ./build_native_sampler.sh
 ```
 
-If TIDE-Adj is used directly from source, verify from the directory that
-contains the `tide_adj/` package directory:
+Verify that the installed package can find the native sampler:
 
 ```bash
-cd <directory-containing-tide_adj>
 python -c "import tide_adj; print(tide_adj.__version__); print(tide_adj.native_sampler_available())"
 python -c "import tide_adj.native_sampler as ns; print(ns.__file__)"
 ```
@@ -109,8 +123,8 @@ when the matching compiler is available.
 
 ## Basic Imports
 
-Run scripts from the directory containing `tide_adj/`, or add that directory to
-`PYTHONPATH`.
+After installation, scripts can import TIDE-Adj from any working directory in
+the same Python environment.
 
 ```python
 import meep as mp
@@ -379,30 +393,27 @@ scale each band adjoint source and gradient kernel.
 
 ## Running
 
-Until package installation metadata is added, run from a location where
-`tide_adj` is importable. For a source checkout, this is the parent directory of
-the `tide_adj/` package directory. Alternatively, set `PYTHONPATH` to that
-parent directory.
+Install TIDE-Adj in the active environment, then run scripts from any working
+directory in that environment.
 
 Single process:
 
 ```bash
-cd <directory-containing-tide_adj>
 python <path-to-your-script.py>
 ```
 
 MPI:
 
 ```bash
-cd <directory-containing-tide_adj>
 mpirun -np 4 python <path-to-your-script.py>
 ```
 
-From another working directory:
+For temporary source-tree use without installation, set `PYTHONPATH` to the
+`src/` directory:
 
 ```bash
-PYTHONPATH=<directory-containing-tide_adj> python <path-to-your-script.py>
-PYTHONPATH=<directory-containing-tide_adj> mpirun -np 4 python <path-to-your-script.py>
+PYTHONPATH=<tide-adj-source-directory>/src python <path-to-your-script.py>
+PYTHONPATH=<tide-adj-source-directory>/src mpirun -np 4 python <path-to-your-script.py>
 ```
 
 Check what TIDE-Adj selected:
@@ -428,10 +439,12 @@ which mpic++
 conda install -c conda-forge mpi4py mpich cxx-compiler
 ```
 
-If `import tide_adj` fails, run from the parent directory of `tide_adj/`:
+If `import tide_adj` fails, install the source checkout or set `PYTHONPATH` to
+the source `src/` directory:
 
 ```bash
-cd <directory-containing-tide_adj>
+cd <tide-adj-source-directory>
+python -m pip install -e .
 python -c "import tide_adj; print(tide_adj.__file__)"
 ```
 

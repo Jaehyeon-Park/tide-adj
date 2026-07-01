@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PACKAGE_DIR="${SCRIPT_DIR}/src/tide_adj"
 CONDA_ENV_PREFIX="${MEEP_CONDA_PREFIX:-${CONDA_PREFIX:-}}"
 
 if [[ -z "${CONDA_ENV_PREFIX}" ]]; then
@@ -22,10 +23,10 @@ NP_INCLUDE="$("${PYTHON_BIN}" -c 'import numpy; print(numpy.get_include())')"
   -I"${PY_INCLUDE}" \
   -I"${NP_INCLUDE}" \
   -I"${CONDA_ENV_PREFIX}/include" \
-  "${SCRIPT_DIR}/native_sampler.cpp" \
+  "${PACKAGE_DIR}/native_sampler.cpp" \
   -L"${CONDA_ENV_PREFIX}/lib" \
   -Wl,-rpath,"${CONDA_ENV_PREFIX}/lib" \
   -lmeep \
-  -o "${SCRIPT_DIR}/native_sampler${EXT_SUFFIX}"
+  -o "${PACKAGE_DIR}/native_sampler${EXT_SUFFIX}"
 
-echo "Built ${SCRIPT_DIR}/native_sampler${EXT_SUFFIX}"
+echo "Built ${PACKAGE_DIR}/native_sampler${EXT_SUFFIX}"
