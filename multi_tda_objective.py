@@ -13,15 +13,81 @@ from .sampling_grid import FastFieldGrid
 from .specs import DesignGrid, PointTarget, SimulationSpec
 
 
-def bandpass_kernel(f_low: float, f_high: float, dt: float, length: int) -> np.ndarray:
-    """Return a windowed ideal bandpass kernel normalized at band center."""
+def _numpy_window(window, length: int, window_params=None) -> np.ndarray:
+    """Return a supported NumPy window by public TIDE-Adj window name."""
+    if window_params is None:
+        window_params = {}
+    if window is None:
+        window = "rectangular"
+    if not isinstance(window, str):
+        raise TypeError("window must be a string or None")
+
+    name = window.lower()
+    if name in ("rectangular", "boxcar", "none"):
+        if window_params:
+            raise ValueError("rectangular window does not accept parameters")
+        return np.ones(length)
+    if name == "hamming":
+        if window_params:
+            raise ValueError("hamming window does not accept parameters")
+        return np.hamming(length)
+    if name in ("hann", "hanning"):
+        if window_params:
+            raise ValueError("hann window does not accept parameters")
+        return np.hanning(length)
+    if name == "blackman":
+        if window_params:
+            raise ValueError("blackman window does not accept parameters")
+        return np.blackman(length)
+    if name == "bartlett":
+        if window_params:
+            raise ValueError("bartlett window does not accept parameters")
+        return np.bartlett(length)
+    if name == "kaiser":
+        unknown = set(window_params) - {"beta"}
+        if unknown:
+            raise ValueError("kaiser window only accepts beta")
+        if "beta" not in window_params:
+            raise ValueError("kaiser window requires window_params={'beta': ...}")
+        return np.kaiser(length, float(window_params["beta"]))
+    raise ValueError(
+        "window must be one of: rectangular, hamming, hann, blackman, bartlett, kaiser"
+    )
+
+
+def bandpass_kernel(
+    f_low: float,
+    f_high: float,
+    dt: float,
+    length: int,
+    *,
+    window: Optional[str] = "hamming",
+    window_params=None,
+) -> np.ndarray:
+    """Return a windowed ideal bandpass kernel normalized at band center.
+
+    Args:
+        f_low: Lower band edge in Meep frequency units.
+        f_high: Upper band edge in Meep frequency units.
+        dt: Time step of the sampled signal.
+        length: Number of samples in the finite impulse response kernel.
+        window: NumPy window used to taper the finite impulse response.
+            Supported values are ``"rectangular"``/``None``, ``"hamming"``,
+            ``"hann"``, ``"blackman"``, ``"bartlett"``, and ``"kaiser"``.
+        window_params: Optional window parameters. Currently only
+            ``window="kaiser"`` uses this, with ``{"beta": value}``.
+
+    Returns:
+        Real-valued 1D kernel. The response magnitude is normalized to one at
+        the band-center frequency when the center response is nonzero.
+    """
     n = np.arange(length)
     tau = (n - (length - 1) / 2) * dt
     kernel = (
         2 * f_high * np.sinc(2 * f_high * tau)
         - 2 * f_low * np.sinc(2 * f_low * tau)
     )
-    kernel *= np.hamming(kernel.size)
+    kernel *= _numpy_window(window, kernel.size, window_params)
 
     f_center = 0.5 * (f_low + f_high)
     response = np.sum(kernel * np.exp(-2j * np.pi * f_center * tau)) * dt
@@ -86,6 +152,8 @@ class MultiTDAObjective:
         wavelength_bands: Optional[Sequence[tuple[float, float]]] = None,
         weights: Optional[Sequence[float]] = None,
         kernel_length: Optional[int] = None,
+        kernel_window: Optional[str] = "hamming",
+        kernel_window_params=None,
         pixel_chunk="auto",
         target_chunks_per_rank: int = 8,
         min_pixel_chunk: int = 16,
@@ -126,6 +194,13 @@ class MultiTDAObjective:
             weights: Per-band amplitude weights applied to monitor filtering and
                 gradient kernels.
             kernel_length: Number of time samples in each bandpass kernel.
+            kernel_window: NumPy window used to taper each temporal-convolution
+                bandpass kernel. Supported values are ``"rectangular"``/``None``,
+                ``"hamming"``, ``"hann"``, ``"blackman"``, ``"bartlett"``, and
+                ``"kaiser"``.
+            kernel_window_params: Optional parameters for ``kernel_window``.
+                Currently only ``"kaiser"`` uses this, with
+                ``{"beta": value}``.
             pixel_chunk: Number of design pixels processed at once during
                 temporal-convolution gradient evaluation, or ``"auto"``.
             target_chunks_per_rank: Target number of pixel chunks assigned to each
@@ -238,6 +313,8 @@ class MultiTDAObjective:
         self.monitor_positions = list(monitor_positions)
         self.component = component
         self.weights = np.asarray(weights, dtype=float)
+        self.kernel_window = kernel_window
+        self.kernel_window_params = dict(kernel_window_params or {})
         self.pixel_chunk = self._resolve_pixel_chunk(
             pixel_chunk,
             target_chunks_per_rank=target_chunks_per_rank,
@@ -260,7 +337,16 @@ class MultiTDAObjective:
         for lam_min, lam_max in wavelength_bands:
             f_low = 1 / lam_max
             f_high = 1 / lam_min
-            self.kernels.append(bandpass_kernel(f_low, f_high, self.dt, kernel_length))
+            self.kernels.append(
+                bandpass_kernel(
+                    f_low,
+                    f_high,
+                    self.dt,
+                    kernel_length,
+                    window=self.kernel_window,
+                    window_params=self.kernel_window_params,
+                )
+            )
 
         if len(self.monitor_positions) != len(self.kernels):
             raise ValueError("monitor_positions must match the number of wavelength bands")

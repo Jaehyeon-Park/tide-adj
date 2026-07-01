@@ -4,6 +4,45 @@ import numpy as np
 import tide_adj as tp
 
 
+def _make_minimal_multi_tda(**kwargs):
+    params = dict(
+        update_design=lambda _: None,
+        sim_factory=lambda sources=None: None,
+        coords_x=[0.0],
+        coords_y=[0.0],
+        t_final=1.0,
+        monitor_positions=[mp.Vector3()],
+        component=mp.Ez,
+        wavelength_bands=[(0.4, 0.5)],
+        weights=[1.0],
+        kernel_length=9,
+        pixel_chunk=1,
+        adjoint_source_size=mp.Vector3(),
+        adjoint_source_amplitude=1.0,
+        material_factor=3.0,
+        cell_area=1.0,
+        dt=0.05,
+    )
+    params.update(kwargs)
+    return tp.MultiTDAObjective(**params)
+
+
+def test_multi_tda_objective_accepts_numpy_kernel_window_options():
+    rectangular = _make_minimal_multi_tda(kernel_window="rectangular")
+    hamming = _make_minimal_multi_tda(kernel_window="hamming")
+    kaiser_4 = _make_minimal_multi_tda(
+        kernel_window="kaiser",
+        kernel_window_params={"beta": 4.0},
+    )
+    kaiser_8 = _make_minimal_multi_tda(
+        kernel_window="kaiser",
+        kernel_window_params={"beta": 8.0},
+    )
+
+    assert not np.allclose(rectangular.kernels[0], hamming.kernels[0])
+    assert not np.allclose(kaiser_4.kernels[0], kaiser_8.kernels[0])
+
+
 def test_multi_tda_objective_exports_and_filters_signals():
     obj = tp.MultiTDAObjective(
         update_design=lambda _: None,
@@ -171,6 +210,7 @@ def test_multi_tda_objective_accepts_bundled_design_simulation_and_targets():
 
 
 if __name__ == "__main__":
+    test_multi_tda_objective_accepts_numpy_kernel_window_options()
     test_multi_tda_objective_exports_and_filters_signals()
     test_multi_tda_objective_value_only_path_sets_band_state()
     test_multi_tda_objective_auto_pixel_chunk()
