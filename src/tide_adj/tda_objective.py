@@ -283,10 +283,7 @@ class TDAObjective:
                 e_fld_t.append(fwd_field["obj"].sample())
             sample_count["count"] += 1
 
-        if need_gradient:
-            sim_fwd.run(record_fwd, until=self.t_final)
-        else:
-            sim_fwd.run(record_fwd, until=self.t_final)
+        sim_fwd.run(record_fwd, until=self.t_final)
 
         actual_time = sim_fwd.round_time()
         monitor_history = np.array(e_mon_t)
