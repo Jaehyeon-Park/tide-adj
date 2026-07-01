@@ -320,6 +320,7 @@ multi_tda = tp.MultiTDAObjective(
     wavelength_bands=[(0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8)],
     weights=band_weights,
     kernel_length=2001,
+    kernel_window="hamming",
     dt=dt,
     scalarization_fn=scalarization_fn,
 )
@@ -361,6 +362,8 @@ scale each band adjoint source and gradient kernel.
 | `wavelength_bands` | List of `(lambda_min, lambda_max)` intervals. Each interval creates one bandpass temporal-convolution kernel. |
 | `weights` | Per-band amplitude weights. These are applied to monitor filtering and the gradient kernel. |
 | `kernel_length` | Number of time samples in the temporal-convolution bandpass kernel. Larger values give narrower filtering but increase runtime and temporary storage. |
+| `kernel_window` | NumPy window used to taper each bandpass kernel. Supported values are `"rectangular"`/`None`, `"hamming"`, `"hann"`, `"blackman"`, `"bartlett"`, and `"kaiser"`. Default is `"hamming"`. |
+| `kernel_window_params` | Optional window parameters. Currently only `"kaiser"` uses this, with `{"beta": value}`. |
 | `pixel_chunk` | Design-pixel block size for temporal-convolution gradient evaluation. Defaults to `"auto"` and usually should be omitted. |
 | `target_chunks_per_rank` | Target number of pixel chunks per MPI rank when `pixel_chunk="auto"`. Default is `8`. |
 | `min_pixel_chunk`, `max_pixel_chunk` | Lower and upper bounds for automatic `pixel_chunk`. Defaults are `16` and `128`. |
