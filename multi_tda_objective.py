@@ -98,6 +98,16 @@ def bandpass_kernel(
 
 
 def temporal_convolve_signal(signal: np.ndarray, kernel: np.ndarray, dt: float) -> np.ndarray:
+    """Convolve a time signal with a temporal kernel.
+
+    Args:
+        signal: Time-domain signal. Convolution is applied along axis 0.
+        kernel: 1D temporal convolution kernel.
+        dt: Time step used to scale the discrete convolution as a Riemann sum.
+
+    Returns:
+        Filtered signal with the same shape as ``signal``.
+    """
     return convolve1d(signal, kernel, axis=0, mode="constant", cval=0.0) * dt
 
 
@@ -109,6 +119,18 @@ def auto_pixel_chunk(
     min_pixel_chunk: int = 16,
     max_pixel_chunk: int = 128,
 ) -> int:
+    """Choose a design-pixel chunk size for MPI-distributed gradient work.
+
+    Args:
+        n_pixels: Total number of design pixels.
+        nproc: MPI rank count. Defaults to ``mp.count_processors()``.
+        target_chunks_per_rank: Target number of chunks assigned to each rank.
+        min_pixel_chunk: Lower bound for the returned chunk size.
+        max_pixel_chunk: Upper bound for the returned chunk size.
+
+    Returns:
+        Positive pixel chunk size clipped to the requested bounds.
+    """
     if n_pixels <= 0:
         raise ValueError("n_pixels must be positive")
     if nproc is None:
@@ -426,16 +448,56 @@ class MultiTDAObjective:
                     pass
 
     def __call__(self, x: np.ndarray, need_gradient: bool = True):
+        """Evaluate the multi-band objective.
+
+        Args:
+            x: Flat design vector passed to ``update_design``.
+            need_gradient: If ``True``, run the adjoint simulation and return a
+                gradient. If ``False``, run only the forward simulation.
+
+        Returns:
+            ``(value, gradient)`` from ``evaluate``. ``gradient`` is ``None``
+            when ``need_gradient=False``.
+        """
         return self.evaluate(x, need_gradient=need_gradient)
 
     def fom(self, x: np.ndarray) -> float:
+        """Evaluate only the scalar value returned by ``evaluate``.
+
+        Args:
+            x: Flat design vector.
+
+        Returns:
+            Scalar total FoM from the value-only path.
+        """
         value, _ = self.evaluate(x, need_gradient=False)
         return value
 
     def fom_and_grad(self, x: np.ndarray):
+        """Evaluate the scalar value and flat design gradient.
+
+        Args:
+            x: Flat design vector.
+
+        Returns:
+            ``(value, gradient)`` using the maximization convention
+            ``value=total_fom`` and ``gradient=d(value)/d(x)``.
+        """
         return self.evaluate(x, need_gradient=True)
 
     def evaluate(self, x: np.ndarray, need_gradient: bool = True):
+        """Run forward/adjoint simulations for one design vector.
+
+        Args:
+            x: Flat design vector passed to ``update_design``.
+            need_gradient: Whether to run the adjoint simulation and compute a
+                design gradient.
+
+        Returns:
+            ``(total_fom, gradient)``. ``gradient`` is a flat real array with
+            the same number of entries as ``x`` when ``need_gradient=True``;
+            otherwise it is ``None``.
+        """
         self.update_design(x)
 
         sim_fwd = self.sim_factory()
@@ -549,6 +611,15 @@ class MultiTDAObjective:
         return total_fom, gradient
 
     def filter_monitor_signals(self, signals: np.ndarray) -> np.ndarray:
+        """Apply one temporal bandpass filter to each monitor signal.
+
+        Args:
+            signals: Complex monitor history with shape ``(n_time, n_bands)``.
+                Column ``i`` is filtered by kernel ``i`` and weight ``i``.
+
+        Returns:
+            Filtered monitor history with shape ``(n_time, n_bands)``.
+        """
         filtered = []
         for band_index, kernel in enumerate(self.kernels):
             filtered.append(
@@ -561,6 +632,23 @@ class MultiTDAObjective:
         return np.column_stack(filtered)
 
     def band_gradient(self, fwd_history: np.ndarray, adj_history: np.ndarray, gradient_kernel: np.ndarray):
+        """Compute the multi-band design gradient from field histories.
+
+        The design pixels are split into chunks and distributed across MPI
+        ranks by ``chunk_id % nproc``. Each rank computes a rank-local gradient
+        contribution and the result is summed with ``MPI.Allreduce``.
+
+        Args:
+            fwd_history: Forward design-region field samples with shape
+                ``(n_time, len(coords_x), len(coords_y))``.
+            adj_history: Adjoint design-region field samples with the same
+                shape as ``fwd_history``.
+            gradient_kernel: Temporal kernel used to filter the forward field
+                before the finite-difference time derivative is formed.
+
+        Returns:
+            Flat real-valued gradient over the design variables.
+        """
         n_time = fwd_history.shape[0]
         n_x = len(self.coords_x)
         n_y = len(self.coords_y)

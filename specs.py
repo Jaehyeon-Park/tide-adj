@@ -10,7 +10,24 @@ from .objectives import _epsilon_from_medium
 
 @dataclass
 class DesignGrid:
-    """Bundle a Meep MaterialGrid with its TIDE-Adj sampling metadata."""
+    """Bundle a Meep MaterialGrid with TIDE-Adj design-grid metadata.
+
+    Args:
+        material_grid: Meep ``MaterialGrid`` whose weights are optimized.
+        center: Physical center of the design region.
+        size: Physical size of the design region.
+        shape: Number of design variables as ``(nx, ny)``.
+        background: Background medium used to infer ``d epsilon / d rho``.
+        design_material: Design medium used to infer ``d epsilon / d rho``.
+        material_factor: Explicit ``d epsilon / d rho``. If omitted,
+            ``background`` and ``design_material`` are required.
+
+    Attributes:
+        spacing: Physical pixel spacing as ``(dx, dy)``.
+        coords_x: x coordinates used for design-region field sampling.
+        coords_y: y coordinates used for design-region field sampling.
+        cell_area: Area represented by one design variable.
+    """
 
     material_grid: mp.MaterialGrid
     center: mp.Vector3
@@ -39,13 +56,29 @@ class DesignGrid:
             )
 
     def update_weights(self, x: np.ndarray) -> None:
-        """Write a flat design vector into the bundled Meep MaterialGrid."""
+        """Write a flat design vector into the bundled Meep MaterialGrid.
+
+        Args:
+            x: Flat design vector with ``shape[0] * shape[1]`` entries.
+        """
         self.material_grid.update_weights(np.asarray(x).reshape(self.shape))
 
 
 @dataclass
 class SimulationSpec:
-    """Reusable Meep Simulation construction arguments."""
+    """Reusable Meep ``Simulation`` construction arguments.
+
+    Args:
+        cell_size: Meep simulation cell size.
+        boundary_layers: Boundary layers passed to ``mp.Simulation``.
+        geometry: Geometry objects passed to ``mp.Simulation``.
+        sources: Default source list, or a zero-argument callable returning one.
+        resolution: Meep spatial resolution.
+        geometry_center: Optional Meep ``geometry_center``.
+        chunk_layout: Optional MPI chunk layout passed to Meep.
+        dimensions: Optional simulation dimensionality.
+        eps_averaging: Optional Meep subpixel averaging flag.
+    """
 
     cell_size: mp.Vector3
     boundary_layers: Sequence = ()
@@ -62,7 +95,15 @@ class SimulationSpec:
         return selected() if callable(selected) else selected
 
     def make(self, sources=None) -> mp.Simulation:
-        """Create a Meep Simulation, optionally replacing the source list."""
+        """Create a Meep ``Simulation``.
+
+        Args:
+            sources: Optional replacement source list. When omitted, the
+                bundled ``sources`` value is used.
+
+        Returns:
+            Newly constructed Meep simulation.
+        """
         kwargs = {
             "cell_size": self.cell_size,
             "boundary_layers": list(self.boundary_layers),
@@ -83,7 +124,16 @@ class SimulationSpec:
 
 @dataclass(frozen=True)
 class PointTarget:
-    """Point monitor and matching adjoint-source settings."""
+    """Point monitor and matching adjoint-source settings.
+
+    Args:
+        position: Physical point where the forward field is monitored and the
+            adjoint source is placed.
+        component: Meep field component, e.g. ``mp.Ez``.
+        adjoint_source_size: Meep source size for adjoint injection.
+        adjoint_source_amplitude: Scalar amplitude multiplier for the adjoint
+            source.
+    """
 
     position: mp.Vector3
     component: int

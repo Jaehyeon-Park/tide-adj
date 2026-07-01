@@ -198,12 +198,27 @@ class TDAObjective:
         return self.evaluate(x, need_gradient=need_gradient)
 
     def fom(self, x: np.ndarray) -> float:
-        """Evaluate only the scalar objective value for ``x``."""
+        """Evaluate only the scalar objective value.
+
+        Args:
+            x: Flat design vector passed to ``update_design``.
+
+        Returns:
+            Scalar FoM returned by the forward-only path.
+        """
         value, _ = self.evaluate(x, need_gradient=False)
         return value
 
     def fom_and_grad(self, x: np.ndarray):
-        """Evaluate both the scalar objective and the flat design gradient."""
+        """Evaluate both the scalar objective and the flat design gradient.
+
+        Args:
+            x: Flat design vector passed to ``update_design``.
+
+        Returns:
+            ``(objective_value, gradient)`` where ``gradient`` is a flat real
+            array over the design variables.
+        """
         return self.evaluate(x, need_gradient=True)
 
     def _fom_value_and_adjoint_signal(
