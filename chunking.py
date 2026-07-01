@@ -10,6 +10,29 @@ _AXIS_NAMES = ("x", "y", "z")
 
 @dataclass(frozen=True)
 class SourceBoundaryPolicy:
+    """Policy controlling the source-boundary workaround.
+
+    Args:
+        mode: ``"auto"``, ``"layout"``, or ``"finite"``. ``"auto"`` tries a
+            safe chunk layout first and falls back to finite source size when
+            needed. ``"layout"`` requires a safe layout. ``"finite"`` always
+            uses finite source regularization.
+        protected_gap_cells: Minimum distance, in grid cells, between an MPI
+            chunk boundary and each protected point.
+        min_split_spacing_cells: Minimum per-rank split spacing needed before
+            attempting safe chunk-layout placement.
+        finite_source_width_cells: Width, in grid cells, used when replacing a
+            zero-size source axis by a finite source extent.
+        finite_source_axes: Axes to regularize in finite-source mode. If
+            omitted, axes associated with risky chunk boundaries are used.
+        prefer_finite_above_resolution: If set and ``mode="auto"``, use finite
+            sources directly when ``resolution >= prefer_finite_above_resolution``.
+        margin_cells: Margin, in grid cells, excluded from the chunk-boundary
+            search near the cell edge.
+        neighbor_gap_cells: Minimum spacing, in grid cells, between adjacent
+            candidate chunk boundaries.
+    """
+
     mode: str = "auto"
     protected_gap_cells: float = 2.0
     min_split_spacing_cells: float = 8.0
@@ -22,6 +45,25 @@ class SourceBoundaryPolicy:
 
 @dataclass(frozen=True)
 class SourceBoundaryDecision:
+    """Result of a source-boundary workaround decision.
+
+    Args:
+        method: Selected method: ``"serial"``, ``"layout"``, or ``"finite"``.
+        reason: Human-readable explanation for the selected method.
+        chunk_layout: Meep ``BinaryPartition`` to pass as ``chunk_layout``, or
+            ``None`` when no custom layout is needed.
+        source_size: Source size after any finite-source regularization.
+        source_amplitude: Source amplitude after any finite-source
+            renormalization.
+        changed_axes: Source-size axes changed by finite-source regularization.
+        dimensions: Simulated dimensionality used for this decision.
+        resolution: Meep resolution used for finite-source width conversion.
+        finite_source_width_cells: Width in grid cells used for finite-source
+            regularization.
+        finite_source_axes: Axes selected for finite-source regularization.
+        boundary_axes: Chunk-boundary axes checked by the policy.
+    """
+
     method: str
     reason: str
     chunk_layout: Optional[mp.BinaryPartition]
@@ -39,7 +81,20 @@ class SourceBoundaryDecision:
         source_size: mp.Vector3,
         source_amplitude: complex = 1.0,
     ) -> Tuple[mp.Vector3, complex, Tuple[str, ...]]:
-        """Apply this decision's finite-source fallback to another source."""
+        """Apply this decision's finite-source fallback to another source.
+
+        Args:
+            source_size: Original Meep source size.
+            source_amplitude: Original source amplitude.
+
+        Returns:
+            ``(new_size, new_amplitude, changed_axes)``. If this decision did
+            not select finite-source fallback, the original size/amplitude are
+            returned and ``changed_axes`` is empty.
+
+        Raises:
+            ValueError: If finite-source metadata is missing from the decision.
+        """
         if self.method != "finite":
             return source_size, source_amplitude, ()
         if self.dimensions is None or self.resolution is None or self.finite_source_width_cells is None:
@@ -159,7 +214,26 @@ def safe_chunk_layout(
     margin_cells: float = 1.0,
     neighbor_gap_cells: float = 0.25,
 ) -> Optional[mp.BinaryPartition]:
-    """Create a 1D MPI chunk layout avoiding protected source/monitor points."""
+    """Create a 1D MPI chunk layout avoiding protected points.
+
+    Args:
+        cell_size: Meep simulation cell size.
+        geometry_center: Physical center of the simulation geometry.
+        resolution: Meep spatial resolution.
+        protected_points: Points that chunk boundaries should avoid.
+        num_proc: Number of MPI ranks. Defaults to ``mp.count_processors()``.
+        split_axis: Axis along which the cell is partitioned.
+        protected_gap_cells: Minimum boundary-to-point distance in grid cells.
+        margin_cells: Cell-edge margin excluded from boundary placement.
+        neighbor_gap_cells: Minimum spacing between adjacent chunk boundaries.
+
+    Returns:
+        Meep ``BinaryPartition`` for ``mp.Simulation(chunk_layout=...)``.
+        Returns ``None`` for serial runs.
+
+    Raises:
+        ValueError: If a safe boundary placement cannot be found.
+    """
     if resolution <= 0:
         raise ValueError("resolution must be positive")
     if num_proc is None:
@@ -219,7 +293,21 @@ def regularize_source_size_and_amplitude(
     width_cells: float = 2.0,
     axes: Optional[Sequence] = None,
 ) -> Tuple[mp.Vector3, complex, Tuple[str, ...]]:
-    """Replace zero-size simulated axes by a finite width and renormalize amplitude."""
+    """Replace zero-size source axes by finite width and renormalize amplitude.
+
+    Args:
+        source_size: Original Meep source size.
+        source_amplitude: Original source amplitude.
+        dimensions: Simulated dimensionality, 1, 2, or 3.
+        resolution: Meep spatial resolution.
+        width_cells: Finite source width in grid cells.
+        axes: Axes to regularize. If omitted, all simulated axes are checked.
+
+    Returns:
+        ``(new_size, new_amplitude, changed_axes)``. Amplitude is divided by
+        the product of newly added finite widths so that the integrated source
+        weight is preserved for the changed axes.
+    """
     if dimensions not in (1, 2, 3):
         raise ValueError("dimensions must be 1, 2, or 3")
     if resolution <= 0:
@@ -262,7 +350,26 @@ def resolve_source_boundary_workaround(
     split_axes: Optional[Sequence] = None,
     policy: Optional[SourceBoundaryPolicy] = None,
 ) -> SourceBoundaryDecision:
-    """Choose safe chunk layout when feasible, otherwise regularize source size."""
+    """Resolve chunk-layout or finite-source workaround for protected points.
+
+    Args:
+        cell_size: Meep simulation cell size.
+        geometry_center: Physical center of the simulation geometry.
+        resolution: Meep spatial resolution.
+        protected_points: Points that chunk boundaries should avoid.
+        source_size: Source size to use if finite-source fallback is needed.
+        source_amplitude: Source amplitude to renormalize with the source size.
+        dimensions: Simulated dimensionality.
+        num_proc: MPI rank count. Defaults to ``mp.count_processors()``.
+        split_axis: Preferred axis for the returned Meep chunk layout.
+        split_axes: Axes to check for risky boundaries. If omitted,
+            ``split_axis`` is checked.
+        policy: Workaround policy. Defaults to ``SourceBoundaryPolicy()``.
+
+    Returns:
+        ``SourceBoundaryDecision`` containing the selected method, optional
+        chunk layout, and source size/amplitude to use.
+    """
     if policy is None:
         policy = SourceBoundaryPolicy()
     if policy.mode not in ("auto", "layout", "finite"):
@@ -427,7 +534,31 @@ def adjoint_source_boundary_workaround(
     check_axes: Optional[Sequence] = None,
     policy: Optional[SourceBoundaryPolicy] = None,
 ) -> SourceBoundaryDecision:
-    """Return chunk layout and adjoint-source size/amplitude for point monitors."""
+    """Choose chunk layout and adjoint-source settings for point targets.
+
+    Args:
+        cell_size: Meep simulation cell size.
+        geometry_center: Physical center of the simulation geometry.
+        resolution: Meep spatial resolution.
+        source_position: Point where the adjoint source will be placed.
+        monitor_positions: Additional protected points, usually forward
+            source or monitor locations that should not lie on MPI boundaries.
+        dimensions: Simulated dimensionality.
+        source_size: Original adjoint source size. Defaults to a point source.
+        source_amplitude: Original adjoint source amplitude.
+        num_proc: MPI rank count. Defaults to ``mp.count_processors()``.
+        layout_axis: Preferred axis for the returned Meep chunk layout.
+        check_axes: Axes checked for risky MPI chunk boundaries. Defaults to
+            ``(mp.X, mp.Y)`` in 2D and ``(mp.X,)`` in 1D.
+        policy: Optional ``SourceBoundaryPolicy``. The default tries safe chunk
+            layout below resolution 80 and finite-source fallback at higher
+            resolution.
+
+    Returns:
+        ``SourceBoundaryDecision`` containing ``chunk_layout``,
+        ``source_size``, and ``source_amplitude`` values to pass into the
+        caller's Meep setup.
+    """
     if source_size is None:
         source_size = mp.Vector3()
     if check_axes is None:
