@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tide-adj"
+version = "0.5.0a1"
+description = "Time-domain inverse-design extensions for adjoint optimization with Meep"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "GPL-2.0-only" }
+authors = [
+  { name = "JaeHyeon Park" }
+]
+dependencies = [
+  "autograd",
+  "numpy",
+  "scipy",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.urls]
+Homepage = "https://github.com/Jaehyeon-Park/tide-adj"
+Repository = "https://github.com/Jaehyeon-Park/tide-adj"
+Issues = "https://github.com/Jaehyeon-Park/tide-adj/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tide_adj = ["*.cpp", "*.pyi"]
