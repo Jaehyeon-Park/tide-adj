@@ -125,9 +125,9 @@ class FastFieldGrid:
         """
         global _native_sampler_enabled
         sample_plan = self.ensure_plan()
-        if _native_sampler_enabled and sample_plan is not None and hasattr(native_sampler, "sample_component_grid_plan_local_sum"):
+        if _native_sampler_enabled and sample_plan is not None and hasattr(native_sampler, "sample_component_grid_plan_allreduced"):
             try:
-                return native_sampler.sample_component_grid_plan_local_sum(sample_plan)
+                return native_sampler.sample_component_grid_plan_allreduced(sample_plan)
             except Exception:
                 _native_sampler_enabled = False
 
@@ -140,8 +140,8 @@ class FastFieldGrid:
                         self.coords_y,
                         int(self.component),
                     )
-                if hasattr(native_sampler, "sample_component_grid_local_sum"):
-                    return native_sampler.sample_component_grid_local_sum(
+                if hasattr(native_sampler, "sample_component_grid_allreduced"):
+                    return native_sampler.sample_component_grid_allreduced(
                         int(self.sim.fields.this),
                         self.coords_x,
                         self.coords_y,
@@ -174,9 +174,9 @@ class FastFieldGrid:
         global _native_sampler_enabled
         if self.has_symmetry:
             return self.sample() * multiplier
-        if _native_sampler_enabled and hasattr(native_sampler, "accumulate_component_product_local_sum"):
+        if _native_sampler_enabled and hasattr(native_sampler, "accumulate_component_product_allreduced"):
             try:
-                return native_sampler.accumulate_component_product_local_sum(
+                return native_sampler.accumulate_component_product_allreduced(
                     int(self.sim.fields.this),
                     self.coords_x,
                     self.coords_y,
