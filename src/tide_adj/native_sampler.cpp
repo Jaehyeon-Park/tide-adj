@@ -290,7 +290,7 @@ static PyObject *create_component_grid_plan(PyObject *, PyObject *args) {
     return capsule;
 }
 
-static PyObject *sample_component_grid_plan_local_sum(PyObject *, PyObject *args) {
+static PyObject *sample_component_grid_plan_allreduced(PyObject *, PyObject *args) {
     PyObject *plan_obj = nullptr;
 
     if (!PyArg_ParseTuple(args, "O", &plan_obj)) {
@@ -343,7 +343,7 @@ static PyObject *sample_component_grid_plan_local_sum(PyObject *, PyObject *args
     return arr_obj;
 }
 
-static PyObject *sample_component_grid_local_sum(PyObject *, PyObject *args) {
+static PyObject *sample_component_grid_allreduced(PyObject *, PyObject *args) {
     unsigned long long fields_addr = 0;
     PyObject *xs_obj = nullptr;
     PyObject *ys_obj = nullptr;
@@ -426,7 +426,7 @@ static PyObject *sample_component_grid_local_sum(PyObject *, PyObject *args) {
     return arr_obj;
 }
 
-static PyObject *accumulate_component_product_local_sum(PyObject *, PyObject *args) {
+static PyObject *accumulate_component_product_allreduced(PyObject *, PyObject *args) {
     unsigned long long fields_addr = 0;
     PyObject *xs_obj = nullptr;
     PyObject *ys_obj = nullptr;
@@ -783,8 +783,8 @@ static PyMethodDef FastMeepSampleMethods[] = {
         "Precompute rank-local interpolation support for a Meep field component over xs x ys.",
     },
     {
-        "sample_component_grid_plan_local_sum",
-        sample_component_grid_plan_local_sum,
+        "sample_component_grid_plan_allreduced",
+        sample_component_grid_plan_allreduced,
         METH_VARARGS,
         "Sample a Meep field component using a precomputed rank-local plan and one MPI all-rank sum.",
     },
@@ -795,14 +795,14 @@ static PyMethodDef FastMeepSampleMethods[] = {
         "Sample a Meep field component over xs x ys using meep::fields::get_field.",
     },
     {
-        "sample_component_grid_local_sum",
-        sample_component_grid_local_sum,
+        "sample_component_grid_allreduced",
+        sample_component_grid_allreduced,
         METH_VARARGS,
         "Sample a Meep field component using rank-local chunks and one MPI all-rank sum.",
     },
     {
-        "accumulate_component_product_local_sum",
-        accumulate_component_product_local_sum,
+        "accumulate_component_product_allreduced",
+        accumulate_component_product_allreduced,
         METH_VARARGS,
         "Accumulate field-component times a complex grid using rank-local chunks and one MPI all-rank sum.",
     },

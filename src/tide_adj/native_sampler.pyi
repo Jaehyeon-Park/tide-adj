@@ -24,7 +24,7 @@ def create_component_grid_plan(
     ...
 
 
-def sample_component_grid_plan_local_sum(
+def sample_component_grid_plan_allreduced(
     plan: Any,
 ) -> NDArray[np.complex128]:
     """Sample a component grid using a precomputed native plan.
@@ -33,7 +33,7 @@ def sample_component_grid_plan_local_sum(
         plan: Opaque object returned by ``create_component_grid_plan``.
 
     Returns:
-        Complex grid containing the rank-local/MPI-summed sampled field.
+        Complex sampled field grid after MPI all-reduction.
     """
     ...
 
@@ -58,13 +58,13 @@ def sample_component_grid(
     ...
 
 
-def sample_component_grid_local_sum(
+def sample_component_grid_allreduced(
     fields_addr: int,
     coords_x: Sequence[float],
     coords_y: Sequence[float],
     component: int,
 ) -> NDArray[np.complex128]:
-    """Sample a component grid and sum rank-local contributions.
+    """Sample a component grid and MPI-all-reduce rank-local contributions.
 
     Args:
         fields_addr: Integer address of Meep's low-level ``fields`` object.
@@ -78,14 +78,14 @@ def sample_component_grid_local_sum(
     ...
 
 
-def accumulate_component_product_local_sum(
+def accumulate_component_product_allreduced(
     fields_addr: int,
     coords_x: Sequence[float],
     coords_y: Sequence[float],
     component: int,
     multiplier: NDArray[np.complex128],
 ) -> NDArray[np.complex128]:
-    """Return MPI-summed ``sampled_field * multiplier``.
+    """Return MPI-all-reduced ``sampled_field * multiplier``.
 
     Args:
         fields_addr: Integer address of Meep's low-level ``fields`` object.
@@ -95,7 +95,7 @@ def accumulate_component_product_local_sum(
         multiplier: Complex grid multiplied pointwise with the sampled field.
 
     Returns:
-        Complex product grid after MPI summation.
+        Complex product grid after MPI all-reduction.
     """
     ...
 
