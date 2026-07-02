@@ -18,6 +18,8 @@ build details may change before the first stable release.
 Current pre-release: `v0.5.0-alpha.1`  
 Python package version: `0.5.0a1`
 
+**TIDE-Adj is an early-stage pre-release package. The current validation is limited to 2D TMz / Ez-field workflows. 2D TEz and 3D full-vector use cases are planned, but should be considered unsupported until they are validated.**
+
 ## License
 
 TIDE-Adj is licensed under the GNU General Public License version 2.0 only
